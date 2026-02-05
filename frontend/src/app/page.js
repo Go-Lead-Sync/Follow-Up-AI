@@ -59,6 +59,7 @@ export default function Home() {
   const [scanUrl, setScanUrl] = useState("");
   const [scanResult, setScanResult] = useState(null);
   const [scanLoading, setScanLoading] = useState(false);
+  const [agentStatus, setAgentStatus] = useState("");
   const [messageForm, setMessageForm] = useState({
     businessId: "",
     contactId: "",
@@ -233,6 +234,90 @@ export default function Home() {
     }));
   };
 
+  const createAgentFromScan = async () => {
+    if (!scanUrl) return;
+    setAgentStatus("Scanning site...");
+    setScanLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${apiBase}/api/scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: scanUrl, maxPages: 25 }),
+      });
+      const data = await response.json();
+      setScanResult(data);
+      if (data?.profile) {
+        setAgentStatus("Building AI agent...");
+        const p = data.profile;
+        const nextBusiness = {
+          ...business,
+          name: p.name || business.name,
+          tone: p.tone || business.tone,
+          instructionBlock: p.instructionBlock || business.instructionBlock,
+          doList: p.doList || business.doList,
+          dontList: p.dontList || business.dontList,
+          bookingLink: p.bookingLink || business.bookingLink,
+          hours: p.hours || business.hours,
+          policies: p.policies || business.policies,
+          faqs: p.faqs || business.faqs,
+        };
+        setBusiness(nextBusiness);
+
+        const method = business.id ? "PUT" : "POST";
+        const url = business.id ? `${apiBase}/api/business/${business.id}` : `${apiBase}/api/business`;
+        const saveRes = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(nextBusiness),
+        });
+        const saved = await saveRes.json();
+        if (saved?.id) {
+          setBusiness({
+            id: saved.id,
+            name: saved.name,
+            tone: saved.tone,
+            instructionBlock: saved.instruction_block || "",
+            doList: saved.do_list || "",
+            dontList: saved.dont_list || "",
+            bookingLink: saved.booking_link || "",
+            hours: saved.hours || "",
+            policies: saved.policies || "",
+            faqs: saved.faqs || "",
+          });
+          setContactForm((prev) => ({ ...prev, businessId: saved.id }));
+          setMessageForm((prev) => ({ ...prev, businessId: saved.id }));
+          setWorkflow((prev) => ({ ...prev, businessId: saved.id }));
+        }
+
+        if (contacts.length === 0) {
+          const contactRes = await fetch(`${apiBase}/api/contacts`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              businessId: saved?.id || business.id,
+              name: "New Lead",
+              status: "new",
+              lastAppointment: "N/A",
+            }),
+          });
+          const contact = await contactRes.json();
+          if (contact?.id) {
+            setContacts((prev) => [contact, ...prev]);
+          }
+        }
+
+        setAgentStatus("Agent ready. Jumping to preview...");
+        setActive("preview");
+      }
+    } catch (err) {
+      setError("Unable to scan site.");
+      setAgentStatus("");
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
   const saveWorkflow = async () => {
     setLoading(true);
     setError("");
@@ -381,17 +466,18 @@ export default function Home() {
         {active === "scan" && (
           <section className="grid">
             <div className="card">
-              <h2 className="section-title">Scan Website → Build Agent</h2>
-              <p className="subtitle">Scan a website to auto-build the business profile + FAQs + tone.</p>
+              <h2 className="section-title">Create AI Agent</h2>
+              <p className="subtitle">Paste a website and we’ll scan it to build the full AI agent automatically.</p>
               <div className="form-grid">
                 <div>
                   <label>Website URL</label>
                   <input value={scanUrl} onChange={(e) => setScanUrl(e.target.value)} placeholder="https://example.com" />
                 </div>
               </div>
-              <button className="cta" type="button" onClick={runScan} disabled={scanLoading}>
-                {scanLoading ? "Scanning..." : "Scan Site"}
+              <button className="cta" type="button" onClick={createAgentFromScan} disabled={scanLoading}>
+                {scanLoading ? "Creating Agent..." : "Create AI Agent"}
               </button>
+              {agentStatus && <p className="small" style={{ marginTop: 10 }}>{agentStatus}</p>}
               {scanResult?.pages?.length > 0 && (
                 <div className="panel" style={{ marginTop: 14 }}>
                   <div className="small">Pages scanned: {scanResult.pages.length}</div>
@@ -418,9 +504,6 @@ export default function Home() {
                     <div className="list-item"><strong>Policies:</strong> {scanResult.profile.policies}</div>
                     <div className="list-item"><strong>FAQs:</strong> {scanResult.profile.faqs}</div>
                   </div>
-                  <button className="cta" type="button" onClick={applyScanToBusiness} style={{ marginTop: 12 }}>
-                    Apply To Business Profile
-                  </button>
                 </div>
               )}
             </div>
