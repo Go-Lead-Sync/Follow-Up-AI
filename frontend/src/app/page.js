@@ -60,6 +60,7 @@ export default function Home() {
   const [scanResult, setScanResult] = useState(null);
   const [scanLoading, setScanLoading] = useState(false);
   const [agentStatus, setAgentStatus] = useState("");
+  const [agentReady, setAgentReady] = useState(false);
   const [messageForm, setMessageForm] = useState({
     businessId: "",
     contactId: "",
@@ -106,6 +107,7 @@ export default function Home() {
       setMessageForm((prev) => ({ ...prev, businessId: data.id }));
       const contactRes = await fetch(`${apiBase}/api/contacts?businessId=${data.id}`);
       setContacts(await contactRes.json());
+      setAgentReady(true);
       const workflowRes = await fetch(`${apiBase}/api/workflows?businessId=${data.id}`);
       const workflowList = await workflowRes.json();
       if (workflowList?.[0]) {
@@ -288,6 +290,7 @@ export default function Home() {
           setContactForm((prev) => ({ ...prev, businessId: saved.id }));
           setMessageForm((prev) => ({ ...prev, businessId: saved.id }));
           setWorkflow((prev) => ({ ...prev, businessId: saved.id }));
+          setAgentReady(true);
         }
 
         if (contacts.length === 0) {
@@ -397,13 +400,17 @@ export default function Home() {
             <span className="logo-mark" />
             Follow-Up AI
           </div>
-          <div className="nav">
-            {["business", "scan", "contacts", "messages", "workflow", "preview", "leadconnector"].map((key) => (
+          <div className={`nav ${agentReady ? "" : "tabs-muted"}`}>
+            {(["scan", "preview", "business", "contacts", "messages", "workflow", "leadconnector"]).map((key) => (
               <button
                 key={key}
                 type="button"
                 className={active === key ? "active" : ""}
                 onClick={() => {
+                  if (!agentReady && key !== "scan") {
+                    setActive("scan");
+                    return;
+                  }
                   setActive(key);
                   if (key === "business") {
                     loadBusiness();
@@ -415,6 +422,23 @@ export default function Home() {
             ))}
           </div>
         </div>
+
+        {!agentReady && active !== "scan" && (
+          <section className="hero-card">
+            <h1 className="hero-title">Create your AI Agent in one step.</h1>
+            <p className="subtitle">
+              Paste a website, click create, and we’ll build the full agent automatically. No manual setup.
+            </p>
+            <div className="hero-actions">
+              <button className="cta" type="button" onClick={() => setActive("scan")}>
+                Create AI Agent
+              </button>
+              <button className="ghost" type="button" onClick={() => setActive("scan")}>
+                See how it works
+              </button>
+            </div>
+          </section>
+        )}
 
         {active === "business" && (
           <section className="card">
@@ -477,7 +501,7 @@ export default function Home() {
               <button className="cta" type="button" onClick={createAgentFromScan} disabled={scanLoading}>
                 {scanLoading ? "Creating Agent..." : "Create AI Agent"}
               </button>
-              {agentStatus && <p className="small" style={{ marginTop: 10 }}>{agentStatus}</p>}
+              {agentStatus && <div className="status" style={{ marginTop: 10 }}>{agentStatus}</div>}
               {scanResult?.pages?.length > 0 && (
                 <div className="panel" style={{ marginTop: 14 }}>
                   <div className="small">Pages scanned: {scanResult.pages.length}</div>
