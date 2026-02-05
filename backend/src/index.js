@@ -44,6 +44,7 @@ const BusinessSchema = z.object({
   instructionBlock: z.string().optional().nullable(),
   doList: z.string().optional().nullable(),
   dontList: z.string().optional().nullable(),
+  leadconnectorLocationId: z.string().optional().nullable(),
   bookingLink: z.string().optional().nullable(),
   hours: z.string().optional().nullable(),
   policies: z.string().optional().nullable(),
@@ -155,11 +156,33 @@ app.post("/api/business", async (req, res) => {
     return res.status(400).json({ error: "invalid_payload", details: parsed.error.flatten() });
   }
 
-  const { name, tone, instructionBlock, doList, dontList, bookingLink, hours, policies, faqs } = parsed.data;
+  const {
+    name,
+    tone,
+    instructionBlock,
+    doList,
+    dontList,
+    leadconnectorLocationId,
+    bookingLink,
+    hours,
+    policies,
+    faqs,
+  } = parsed.data;
   const { rows } = await pool.query(
-    `insert into business_profiles (name, tone, instruction_block, do_list, dont_list, booking_link, hours, policies, faqs)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
-    [name, tone, instructionBlock || null, doList || null, dontList || null, bookingLink || null, hours || null, policies || null, faqs || null]
+    `insert into business_profiles (name, tone, instruction_block, do_list, dont_list, leadconnector_location_id, booking_link, hours, policies, faqs)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning *`,
+    [
+      name,
+      tone,
+      instructionBlock || null,
+      doList || null,
+      dontList || null,
+      leadconnectorLocationId || null,
+      bookingLink || null,
+      hours || null,
+      policies || null,
+      faqs || null,
+    ]
   );
   res.json(rows[0]);
 });
@@ -170,13 +193,36 @@ app.put("/api/business/:id", async (req, res) => {
     return res.status(400).json({ error: "invalid_payload", details: parsed.error.flatten() });
   }
   const { id } = req.params;
-  const { name, tone, instructionBlock, doList, dontList, bookingLink, hours, policies, faqs } = parsed.data;
+  const {
+    name,
+    tone,
+    instructionBlock,
+    doList,
+    dontList,
+    leadconnectorLocationId,
+    bookingLink,
+    hours,
+    policies,
+    faqs,
+  } = parsed.data;
   const { rows } = await pool.query(
     `update business_profiles
      set name=$1, tone=$2, instruction_block=$3, do_list=$4, dont_list=$5,
-         booking_link=$6, hours=$7, policies=$8, faqs=$9
-     where id=$10 returning *`,
-    [name, tone, instructionBlock || null, doList || null, dontList || null, bookingLink || null, hours || null, policies || null, faqs || null, id]
+         leadconnector_location_id=$6, booking_link=$7, hours=$8, policies=$9, faqs=$10
+     where id=$11 returning *`,
+    [
+      name,
+      tone,
+      instructionBlock || null,
+      doList || null,
+      dontList || null,
+      leadconnectorLocationId || null,
+      bookingLink || null,
+      hours || null,
+      policies || null,
+      faqs || null,
+      id,
+    ]
   );
   res.json(rows[0] || null);
 });
@@ -430,6 +476,94 @@ app.post("/api/sequence/run", async (req, res) => {
   }
 
   res.json({ status: "skipped" });
+});
+
+app.post("/api/leadconnector/webhook", async (req, res) => {
+  const payload = req.body || {};
+  const eventType = payload.type || payload.event || payload.eventType || "";
+  const locationId = payload.locationId || payload.location_id || payload.data?.locationId;
+  const contactId = payload.contactId || payload.contact_id || payload.data?.contactId;
+  const contactName = payload.contactName || payload.data?.contactName || "Lead";
+  const contactEmail = payload.contactEmail || payload.data?.contactEmail || null;
+  const contactPhone = payload.contactPhone || payload.data?.contactPhone || null;
+  const inboundText = payload.message || payload.data?.message || "";
+  const channel = (payload.channel || payload.data?.channel || "sms").toLowerCase();
+
+  const businessRes = await pool.query(
+    "select * from business_profiles where leadconnector_location_id=$1 order by created_at desc limit 1",
+    [locationId || ""]
+  );
+  const business = businessRes.rows[0];
+  if (!business) {
+    return res.json({ ok: true, ignored: "unknown_location" });
+  }
+
+  let contact = null;
+  if (contactId) {
+    const contactRes = await pool.query(
+      "select * from contacts where leadconnector_contact_id=$1 and business_id=$2 limit 1",
+      [contactId, business.id]
+    );
+    contact = contactRes.rows[0];
+  }
+
+  if (!contact) {
+    const insert = await pool.query(
+      `insert into contacts (business_id, leadconnector_contact_id, name, email, phone, status)
+       values ($1, $2, $3, $4, $5, $6) returning *`,
+      [business.id, contactId || null, contactName, contactEmail, contactPhone, "new"]
+    );
+    contact = insert.rows[0];
+  }
+
+  const workflowRes = await pool.query(
+    "select * from workflows where business_id=$1 order by created_at desc limit 1",
+    [business.id]
+  );
+  const workflow = workflowRes.rows[0];
+
+  const norm = eventType.toLowerCase();
+  if (norm.includes("message") || norm.includes("inbound")) {
+    if (inboundText) {
+      await fetch("http://localhost:" + (process.env.PORT || 8080) + "/api/ai/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessId: business.id,
+          contactId: contact.id,
+          inboundText,
+          channel,
+        }),
+      });
+    }
+  } else if (norm.includes("appointment") || norm.includes("created")) {
+    if (workflow) {
+      await fetch("http://localhost:" + (process.env.PORT || 8080) + "/api/sequence/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessId: business.id,
+          contactId: contact.id,
+          workflowId: workflow.id,
+        }),
+      });
+    }
+  } else if (norm.includes("no_show") || norm.includes("noshow")) {
+    await pool.query("update contacts set status=$1 where id=$2", ["no-show", contact.id]);
+    if (workflow) {
+      await fetch("http://localhost:" + (process.env.PORT || 8080) + "/api/sequence/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessId: business.id,
+          contactId: contact.id,
+          workflowId: workflow.id,
+        }),
+      });
+    }
+  }
+
+  res.json({ ok: true });
 });
 
 app.post("/api/prompt-preview", async (req, res) => {

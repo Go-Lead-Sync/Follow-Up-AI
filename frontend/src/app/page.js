@@ -27,6 +27,7 @@ export default function Home() {
     instructionBlock: "",
     doList: "",
     dontList: "",
+    leadconnectorLocationId: "",
     bookingLink: "",
     hours: "",
     policies: "",
@@ -102,6 +103,7 @@ export default function Home() {
         instructionBlock: data.instruction_block || "",
         doList: data.do_list || "",
         dontList: data.dont_list || "",
+        leadconnectorLocationId: data.leadconnector_location_id || "",
         bookingLink: data.booking_link || "",
         hours: data.hours || "",
         policies: data.policies || "",
@@ -148,6 +150,7 @@ export default function Home() {
           instructionBlock: data.instruction_block || "",
           doList: data.do_list || "",
           dontList: data.dont_list || "",
+          leadconnectorLocationId: data.leadconnector_location_id || "",
           bookingLink: data.booking_link || "",
           hours: data.hours || "",
           policies: data.policies || "",
@@ -510,6 +513,10 @@ export default function Home() {
                 <input value={business.bookingLink} onChange={(e) => setBusiness({ ...business, bookingLink: e.target.value })} />
               </div>
               <div>
+                <label>LeadConnector Location ID</label>
+                <input value={business.leadconnectorLocationId} onChange={(e) => setBusiness({ ...business, leadconnectorLocationId: e.target.value })} placeholder="Location ID from LeadConnector" />
+              </div>
+              <div>
                 <label>Hours</label>
                 <input value={business.hours} onChange={(e) => setBusiness({ ...business, hours: e.target.value })} placeholder="Mon-Fri 9am-6pm" />
               </div>
@@ -848,20 +855,37 @@ export default function Home() {
             <div className="card">
               <h2 className="section-title">LeadConnector Integration</h2>
               <p className="subtitle">
-                OAuth is required to connect LeadConnector. Once you create the OAuth app, we will store the credentials
-                and enable live message sync + workflow triggers.
+                No cron needed. This is event-driven: LeadConnector webhooks trigger sequences and AI replies.
               </p>
               <div className="panel">
-                <div className="small">Required fields (pending OAuth)</div>
-                <div className="list">
-                  <div className="list-item">LeadConnector Client ID</div>
-                  <div className="list-item">LeadConnector Client Secret</div>
-                  <div className="list-item">Redirect URL</div>
+                <div className="small">Webhook URL</div>
+                <div className="list" style={{ marginTop: 8 }}>
+                  <div className="list-item">{apiBase}/api/leadconnector/webhook</div>
+                </div>
+                <div className="small" style={{ marginTop: 10 }}>Default events</div>
+                <div className="list" style={{ marginTop: 8 }}>
+                  <div className="list-item">appointment.created</div>
+                  <div className="list-item">appointment.no_show</div>
+                  <div className="list-item">message.received</div>
+                </div>
+              </div>
+              <div className="panel" style={{ marginTop: 12 }}>
+                <div className="small">Sample payload</div>
+                <div className="list" style={{ marginTop: 8 }}>
+                  <div className="list-item">{"{"}"type":"message.received","locationId":"YOUR_LOCATION_ID","contactId":"123","contactName":"Jordan","message":"Can we reschedule to Friday?","channel":"sms"{"}"}</div>
+                </div>
+              </div>
+              <div className="panel" style={{ marginTop: 12 }}>
+                <div className="small">Notes</div>
+                <div className="list" style={{ marginTop: 8 }}>
+                  <div className="list-item">Set the LeadConnector Location ID in Business Profile.</div>
+                  <div className="list-item">Inbound messages trigger Groq replies automatically.</div>
+                  <div className="list-item">Appointment events trigger the next workflow step.</div>
                 </div>
               </div>
             </div>
             <div className="card">
-              <h2 className="section-title">What Weâ€™ll Enable</h2>
+              <h2 className="section-title">What We’ll Enable</h2>
               <div className="timeline">
                 <div className="timeline-item">Sync contacts and calendars</div>
                 <div className="timeline-item">Inbound/outbound SMS + email history</div>
@@ -877,3 +901,4 @@ export default function Home() {
     </main>
   );
 }
+

@@ -19,6 +19,7 @@ export async function ensureSchema() {
       instruction_block text,
       do_list text,
       dont_list text,
+      leadconnector_location_id text,
       booking_link text,
       hours text,
       policies text,
@@ -28,11 +29,13 @@ export async function ensureSchema() {
     alter table business_profiles add column if not exists instruction_block text;
     alter table business_profiles add column if not exists do_list text;
     alter table business_profiles add column if not exists dont_list text;
+    alter table business_profiles add column if not exists leadconnector_location_id text;
 
     create table if not exists contacts (
       id uuid primary key default gen_random_uuid(),
       created_at timestamptz not null default now(),
       business_id uuid references business_profiles(id) on delete cascade,
+      leadconnector_contact_id text,
       name text not null,
       email text,
       phone text,
@@ -40,6 +43,8 @@ export async function ensureSchema() {
       status text,
       notes text
     );
+
+    alter table contacts add column if not exists leadconnector_contact_id text;
 
     create table if not exists workflows (
       id uuid primary key default gen_random_uuid(),
