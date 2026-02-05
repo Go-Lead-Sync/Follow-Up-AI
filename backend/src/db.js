@@ -42,6 +42,19 @@ export async function ensureSchema() {
       definition jsonb not null
     );
 
+    create table if not exists messages (
+      id uuid primary key default gen_random_uuid(),
+      created_at timestamptz not null default now(),
+      business_id uuid references business_profiles(id) on delete cascade,
+      contact_id uuid references contacts(id) on delete cascade,
+      direction text not null,
+      channel text not null,
+      body text not null,
+      status text,
+      provider text,
+      meta jsonb
+    );
+
     create table if not exists followup_requests (
       id uuid primary key default gen_random_uuid(),
       created_at timestamptz not null default now(),

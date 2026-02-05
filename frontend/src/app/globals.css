@@ -127,6 +127,56 @@ main {
   flex-wrap: wrap;
 }
 
+.panel {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(90, 79, 69, 0.18);
+}
+
+.timeline {
+  display: grid;
+  gap: 10px;
+}
+
+.timeline-item {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px dashed rgba(90, 79, 69, 0.3);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.flow-wrap {
+  height: 520px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(90, 79, 69, 0.2);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.chip {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(245, 179, 98, 0.2);
+  color: #6a4a1f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.message-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(90, 79, 69, 0.2);
+}
+
+.message-card small {
+  color: #6a5f56;
+}
+
 .hero h1 {
   font-family: "DM Serif Display", serif;
   font-size: clamp(42px, 6vw, 68px);

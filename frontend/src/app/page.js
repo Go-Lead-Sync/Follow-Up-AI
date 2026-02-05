@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ReactFlow, { Background, Controls } from "reactflow";
+import "reactflow/dist/style.css";
 
 const intents = [
   { value: "confirm", label: "Confirm" },
@@ -49,6 +51,17 @@ export default function Home() {
       ],
     },
   });
+  const [workflowId, setWorkflowId] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [messageForm, setMessageForm] = useState({
+    businessId: "",
+    contactId: "",
+    direction: "outbound",
+    channel: "sms",
+    body: "",
+    status: "queued",
+    provider: "LeadConnector",
+  });
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -80,8 +93,21 @@ export default function Home() {
       });
       setContactForm((prev) => ({ ...prev, businessId: data.id }));
       setWorkflow((prev) => ({ ...prev, businessId: data.id }));
+      setMessageForm((prev) => ({ ...prev, businessId: data.id }));
       const contactRes = await fetch(`${apiBase}/api/contacts?businessId=${data.id}`);
       setContacts(await contactRes.json());
+      const workflowRes = await fetch(`${apiBase}/api/workflows?businessId=${data.id}`);
+      const workflowList = await workflowRes.json();
+      if (workflowList?.[0]) {
+        setWorkflow({
+          businessId: data.id,
+          name: workflowList[0].name,
+          definition: workflowList[0].definition,
+        });
+        setWorkflowId(workflowList[0].id);
+      }
+      const messageRes = await fetch(`${apiBase}/api/messages?businessId=${data.id}`);
+      setMessages(await messageRes.json());
     }
   };
 
@@ -138,16 +164,42 @@ export default function Home() {
     }
   };
 
+  const addMessage = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${apiBase}/api/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(messageForm),
+      });
+      const data = await response.json();
+      if (data?.id) {
+        setMessages((prev) => [data, ...prev]);
+        setMessageForm((prev) => ({ ...prev, body: "" }));
+      }
+    } catch (err) {
+      setError("Unable to log message.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const saveWorkflow = async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`${apiBase}/api/workflows`, {
-        method: "POST",
+      const url = workflowId ? `${apiBase}/api/workflows/${workflowId}` : `${apiBase}/api/workflows`;
+      const method = workflowId ? "PUT" : "POST";
+      const response = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(workflow),
       });
-      await response.json();
+      const data = await response.json();
+      if (data?.id) {
+        setWorkflowId(data.id);
+      }
     } catch (err) {
       setError("Unable to save workflow.");
     } finally {
@@ -213,7 +265,7 @@ export default function Home() {
             Follow-Up AI
           </div>
           <div className="nav">
-            {["business", "contacts", "workflow", "preview"].map((key) => (
+            {["business", "contacts", "messages", "workflow", "preview", "leadconnector"].map((key) => (
               <button
                 key={key}
                 type="button"
@@ -318,6 +370,80 @@ export default function Home() {
           </section>
         )}
 
+        {active === "messages" && (
+          <section className="grid">
+            <div className="card">
+              <h2 className="section-title">Log Message</h2>
+              <div className="form-grid">
+                <div>
+                  <label>Contact</label>
+                  <select
+                    value={messageForm.contactId}
+                    onChange={(e) => setMessageForm({ ...messageForm, contactId: e.target.value })}
+                  >
+                    <option value="">Select contact</option>
+                    {contacts.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label>Direction</label>
+                  <select
+                    value={messageForm.direction}
+                    onChange={(e) => setMessageForm({ ...messageForm, direction: e.target.value })}
+                  >
+                    <option value="outbound">Outbound</option>
+                    <option value="inbound">Inbound</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Channel</label>
+                  <select
+                    value={messageForm.channel}
+                    onChange={(e) => setMessageForm({ ...messageForm, channel: e.target.value })}
+                  >
+                    <option value="sms">SMS</option>
+                    <option value="email">Email</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Status</label>
+                  <input value={messageForm.status} onChange={(e) => setMessageForm({ ...messageForm, status: e.target.value })} />
+                </div>
+                <div>
+                  <label>Provider</label>
+                  <input value={messageForm.provider} onChange={(e) => setMessageForm({ ...messageForm, provider: e.target.value })} />
+                </div>
+                <div>
+                  <label>Message</label>
+                  <textarea rows={3} value={messageForm.body} onChange={(e) => setMessageForm({ ...messageForm, body: e.target.value })} />
+                </div>
+              </div>
+              <button className="cta" type="button" onClick={addMessage} disabled={loading || !messageForm.contactId}>
+                {loading ? "Saving..." : "Log Message"}
+              </button>
+            </div>
+            <div className="card">
+              <h2 className="section-title">Message History</h2>
+              <div className="list">
+                {messages.length === 0 && <p className="small">No messages logged yet.</p>}
+                {messages.map((m) => (
+                  <div key={m.id} className="message-card">
+                    <div className="inline">
+                      <span className="chip">{m.direction}</span>
+                      <span className="chip">{m.channel}</span>
+                      <span className="small">{new Date(m.created_at).toLocaleString()}</span>
+                    </div>
+                    <strong>{m.body}</strong>
+                    <small>{m.status || "status unknown"} · {m.provider || "LeadConnector"}</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
         {active === "workflow" && (
           <section className="grid">
             <div className="card">
@@ -363,14 +489,25 @@ export default function Home() {
               </button>
             </div>
             <div className="card">
-              <h2 className="section-title">Flow Preview</h2>
-              <div className="list">
-                {workflow.definition.steps.map((step, idx) => (
-                  <div key={idx} className="list-item">
-                    <strong>{step.type}</strong>
-                    <div className="small">{step.channel || step.duration || step.intent}</div>
-                  </div>
-                ))}
+              <h2 className="section-title">Visual Flow</h2>
+              <div className="flow-wrap">
+                <ReactFlow
+                  fitView
+                  nodes={[
+                    { id: "trigger", position: { x: 50, y: 80 }, data: { label: "Trigger: Appointment" }, type: "input" },
+                    { id: "confirm", position: { x: 320, y: 40 }, data: { label: "Send: Confirm SMS" } },
+                    { id: "wait", position: { x: 320, y: 160 }, data: { label: "Wait 24h" } },
+                    { id: "recover", position: { x: 600, y: 120 }, data: { label: "No-show Recovery" }, type: "output" },
+                  ]}
+                  edges={[
+                    { id: "e1", source: "trigger", target: "confirm" },
+                    { id: "e2", source: "confirm", target: "wait" },
+                    { id: "e3", source: "wait", target: "recover" },
+                  ]}
+                >
+                  <Background gap={16} />
+                  <Controls />
+                </ReactFlow>
               </div>
             </div>
           </section>
@@ -427,6 +564,35 @@ export default function Home() {
                   </div>
                 </>
               )}
+            </div>
+          </section>
+        )}
+
+        {active === "leadconnector" && (
+          <section className="grid">
+            <div className="card">
+              <h2 className="section-title">LeadConnector Integration</h2>
+              <p className="subtitle">
+                OAuth is required to connect LeadConnector. Once you create the OAuth app, we will store the credentials
+                and enable live message sync + workflow triggers.
+              </p>
+              <div className="panel">
+                <div className="small">Required fields (pending OAuth)</div>
+                <div className="list">
+                  <div className="list-item">LeadConnector Client ID</div>
+                  <div className="list-item">LeadConnector Client Secret</div>
+                  <div className="list-item">Redirect URL</div>
+                </div>
+              </div>
+            </div>
+            <div className="card">
+              <h2 className="section-title">What We’ll Enable</h2>
+              <div className="timeline">
+                <div className="timeline-item">Sync contacts and calendars</div>
+                <div className="timeline-item">Inbound/outbound SMS + email history</div>
+                <div className="timeline-item">Trigger workflows on appointment events</div>
+                <div className="timeline-item">AI responses using business + contact context</div>
+              </div>
             </div>
           </section>
         )}

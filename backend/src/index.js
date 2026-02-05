@@ -52,6 +52,17 @@ const WorkflowSchema = z.object({
   definition: z.unknown(),
 });
 
+const MessageSchema = z.object({
+  businessId: z.string().uuid(),
+  contactId: z.string().uuid(),
+  direction: z.enum(["inbound", "outbound"]),
+  channel: z.enum(["sms", "email"]),
+  body: z.string().min(1),
+  status: z.string().optional().nullable(),
+  provider: z.string().optional().nullable(),
+  meta: z.unknown().optional().nullable(),
+});
+
 app.post("/api/followup/compose", async (req, res) => {
   const parsed = FollowupSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -201,6 +212,49 @@ app.post("/api/workflows", async (req, res) => {
     `insert into workflows (business_id, name, definition)
      values ($1, $2, $3) returning *`,
     [businessId, name, definition]
+  );
+  res.json(rows[0]);
+});
+
+app.put("/api/workflows/:id", async (req, res) => {
+  const parsed = WorkflowSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_payload", details: parsed.error.flatten() });
+  }
+  const { id } = req.params;
+  const { businessId, name, definition } = parsed.data;
+  const { rows } = await pool.query(
+    `update workflows set business_id=$1, name=$2, definition=$3 where id=$4 returning *`,
+    [businessId, name, definition, id]
+  );
+  res.json(rows[0] || null);
+});
+
+app.get("/api/messages", async (req, res) => {
+  const { businessId, contactId } = req.query;
+  if (!businessId) {
+    return res.json([]);
+  }
+  const params = [businessId];
+  let where = "business_id=$1";
+  if (contactId) {
+    params.push(contactId);
+    where += ` and contact_id=$${params.length}`;
+  }
+  const { rows } = await pool.query(`select * from messages where ${where} order by created_at desc`, params);
+  res.json(rows);
+});
+
+app.post("/api/messages", async (req, res) => {
+  const parsed = MessageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_payload", details: parsed.error.flatten() });
+  }
+  const { businessId, contactId, direction, channel, body, status, provider, meta } = parsed.data;
+  const { rows } = await pool.query(
+    `insert into messages (business_id, contact_id, direction, channel, body, status, provider, meta)
+     values ($1, $2, $3, $4, $5, $6, $7, $8) returning *`,
+    [businessId, contactId, direction, channel, body, status || null, provider || null, meta || null]
   );
   res.json(rows[0]);
 });
