@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const intents = [
   { value: "confirm", label: "Confirm" },
@@ -10,6 +10,7 @@ const intents = [
 ];
 
 export default function Home() {
+  const [active, setActive] = useState("business");
   const [form, setForm] = useState({
     name: "",
     businessName: "",
@@ -17,6 +18,38 @@ export default function Home() {
     channel: "sms",
     intent: "confirm",
   });
+  const [business, setBusiness] = useState({
+    id: "",
+    name: "",
+    tone: "",
+    bookingLink: "",
+    hours: "",
+    policies: "",
+    faqs: "",
+  });
+  const [contacts, setContacts] = useState([]);
+  const [contactForm, setContactForm] = useState({
+    businessId: "",
+    name: "",
+    email: "",
+    phone: "",
+    lastAppointment: "",
+    status: "",
+    notes: "",
+  });
+  const [workflow, setWorkflow] = useState({
+    businessId: "",
+    name: "Core Follow-Up",
+    definition: {
+      trigger: "appointment_created",
+      steps: [
+        { type: "message", channel: "sms", intent: "confirm" },
+        { type: "wait", duration: "24h" },
+        { type: "message", channel: "sms", intent: "no_show" },
+      ],
+    },
+  });
+  const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
@@ -25,6 +58,124 @@ export default function Home() {
 
   const handleChange = (key) => (event) => {
     setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  };
+
+  useEffect(() => {
+    loadBusiness();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadBusiness = async () => {
+    const res = await fetch(`${apiBase}/api/business`);
+    const data = await res.json();
+    if (data?.id) {
+      setBusiness({
+        id: data.id,
+        name: data.name || "",
+        tone: data.tone || "",
+        bookingLink: data.booking_link || "",
+        hours: data.hours || "",
+        policies: data.policies || "",
+        faqs: data.faqs || "",
+      });
+      setContactForm((prev) => ({ ...prev, businessId: data.id }));
+      setWorkflow((prev) => ({ ...prev, businessId: data.id }));
+      const contactRes = await fetch(`${apiBase}/api/contacts?businessId=${data.id}`);
+      setContacts(await contactRes.json());
+    }
+  };
+
+  const saveBusiness = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const method = business.id ? "PUT" : "POST";
+      const url = business.id ? `${apiBase}/api/business/${business.id}` : `${apiBase}/api/business`;
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(business),
+      });
+      const data = await response.json();
+      if (data?.id) {
+        setBusiness({
+          id: data.id,
+          name: data.name,
+          tone: data.tone,
+          bookingLink: data.booking_link || "",
+          hours: data.hours || "",
+          policies: data.policies || "",
+          faqs: data.faqs || "",
+        });
+        setContactForm((prev) => ({ ...prev, businessId: data.id }));
+        setWorkflow((prev) => ({ ...prev, businessId: data.id }));
+      }
+    } catch (err) {
+      setError("Unable to save business profile.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addContact = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${apiBase}/api/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contactForm),
+      });
+      const data = await response.json();
+      if (data?.id) {
+        setContacts((prev) => [data, ...prev]);
+        setContactForm((prev) => ({ ...prev, name: "", email: "", phone: "", notes: "" }));
+      }
+    } catch (err) {
+      setError("Unable to add contact.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveWorkflow = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${apiBase}/api/workflows`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(workflow),
+      });
+      await response.json();
+    } catch (err) {
+      setError("Unable to save workflow.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const runPreview = async (contactId) => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${apiBase}/api/prompt-preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessId: business.id,
+          contactId,
+          intent: form.intent,
+          channel: form.channel,
+        }),
+      });
+      const data = await response.json();
+      setPreview(data);
+    } catch (err) {
+      setError("Unable to preview AI prompt.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -56,35 +207,180 @@ export default function Home() {
   return (
     <main>
       <div className="container">
-        <section className="hero">
-          <div>
-            <span className="badge">Follow-Up AI Suite</span>
-            <h1>Make reschedules feel inevitable.</h1>
-            <p className="subtitle">
-              High-touch follow-ups that recover no-shows, confirm appointments, and book the next visit — with
-              confidence and style.
-            </p>
-            <div className="hero-meta">
-              <span>SMS + Email</span>
-              <span>Groq-powered messaging</span>
-              <span>Neon-backed insights</span>
-            </div>
+        <div className="topbar">
+          <div className="logo">
+            <span className="logo-mark" />
+            Follow-Up AI
           </div>
-          <div className="card float">
-            <form onSubmit={handleSubmit}>
+          <div className="nav">
+            {["business", "contacts", "workflow", "preview"].map((key) => (
+              <button
+                key={key}
+                type="button"
+                className={active === key ? "active" : ""}
+                onClick={() => {
+                  setActive(key);
+                  if (key === "business") {
+                    loadBusiness();
+                  }
+                }}
+              >
+                {key.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {active === "business" && (
+          <section className="card">
+            <h2 className="section-title">Business Profile</h2>
+            <div className="form-grid">
+              <div>
+                <label>Business Name</label>
+                <input value={business.name} onChange={(e) => setBusiness({ ...business, name: e.target.value })} />
+              </div>
+              <div>
+                <label>Tone</label>
+                <input value={business.tone} onChange={(e) => setBusiness({ ...business, tone: e.target.value })} placeholder="Warm, confident, short sentences" />
+              </div>
+              <div>
+                <label>Booking Link</label>
+                <input value={business.bookingLink} onChange={(e) => setBusiness({ ...business, bookingLink: e.target.value })} />
+              </div>
+              <div>
+                <label>Hours</label>
+                <input value={business.hours} onChange={(e) => setBusiness({ ...business, hours: e.target.value })} placeholder="Mon-Fri 9am-6pm" />
+              </div>
+              <div>
+                <label>Policies</label>
+                <textarea rows={3} value={business.policies} onChange={(e) => setBusiness({ ...business, policies: e.target.value })} />
+              </div>
+              <div>
+                <label>FAQs</label>
+                <textarea rows={3} value={business.faqs} onChange={(e) => setBusiness({ ...business, faqs: e.target.value })} />
+              </div>
+            </div>
+            <button className="cta" type="button" onClick={saveBusiness} disabled={loading}>
+              {loading ? "Saving..." : "Save Business Profile"}
+            </button>
+          </section>
+        )}
+
+        {active === "contacts" && (
+          <section className="grid">
+            <div className="card">
+              <h2 className="section-title">Add Contact</h2>
               <div className="form-grid">
                 <div>
-                  <label>Client Name</label>
-                  <input value={form.name} onChange={handleChange("name")} placeholder="Jordan Lee" required />
+                  <label>Name</label>
+                  <input value={contactForm.name} onChange={(e) => setContactForm({ ...contactForm, name: e.target.value })} />
                 </div>
                 <div>
-                  <label>Business Name</label>
-                  <input value={form.businessName} onChange={handleChange("businessName")} placeholder="Bright Dental" required />
+                  <label>Email</label>
+                  <input value={contactForm.email} onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })} />
                 </div>
                 <div>
-                  <label>Appointment Time</label>
-                  <input value={form.appointmentTime} onChange={handleChange("appointmentTime")} placeholder="Thu 3:00 PM" required />
+                  <label>Phone</label>
+                  <input value={contactForm.phone} onChange={(e) => setContactForm({ ...contactForm, phone: e.target.value })} />
                 </div>
+                <div>
+                  <label>Last Appointment</label>
+                  <input value={contactForm.lastAppointment} onChange={(e) => setContactForm({ ...contactForm, lastAppointment: e.target.value })} />
+                </div>
+                <div>
+                  <label>Status</label>
+                  <input value={contactForm.status} onChange={(e) => setContactForm({ ...contactForm, status: e.target.value })} placeholder="no-show, confirm, rebook" />
+                </div>
+                <div>
+                  <label>Notes</label>
+                  <textarea rows={3} value={contactForm.notes} onChange={(e) => setContactForm({ ...contactForm, notes: e.target.value })} />
+                </div>
+              </div>
+              <button className="cta" type="button" onClick={addContact} disabled={loading}>
+                {loading ? "Adding..." : "Add Contact"}
+              </button>
+            </div>
+            <div className="card">
+              <h2 className="section-title">Contacts</h2>
+              <div className="list">
+                {contacts.length === 0 && <p className="small">No contacts yet. Add one to start AI previews.</p>}
+                {contacts.map((c) => (
+                  <div key={c.id} className="list-item">
+                    <strong>{c.name}</strong>
+                    <div className="small">{c.status || "status unknown"} · {c.last_appointment || "no appointment"}</div>
+                    <div className="inline" style={{ marginTop: 8 }}>
+                      <button type="button" className="pill" onClick={() => runPreview(c.id)}>Preview AI</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {active === "workflow" && (
+          <section className="grid">
+            <div className="card">
+              <h2 className="section-title">Workflow Builder</h2>
+              <div className="form-grid">
+                <div>
+                  <label>Workflow Name</label>
+                  <input value={workflow.name} onChange={(e) => setWorkflow({ ...workflow, name: e.target.value })} />
+                </div>
+                <div>
+                  <label>Trigger</label>
+                  <input
+                    value={workflow.definition.trigger}
+                    onChange={(e) =>
+                      setWorkflow({
+                        ...workflow,
+                        definition: { ...workflow.definition, trigger: e.target.value },
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <label style={{ marginTop: 14 }}>Steps (JSON)</label>
+              <textarea
+                rows={8}
+                value={JSON.stringify(workflow.definition.steps, null, 2)}
+                onChange={(e) =>
+                  {
+                    try {
+                      const steps = JSON.parse(e.target.value || "[]");
+                      setWorkflow({
+                        ...workflow,
+                        definition: { ...workflow.definition, steps },
+                      });
+                    } catch (err) {
+                      setError("Invalid JSON in steps.");
+                    }
+                  }
+                }
+              />
+              <button className="cta" type="button" onClick={saveWorkflow} disabled={loading}>
+                {loading ? "Saving..." : "Save Workflow"}
+              </button>
+            </div>
+            <div className="card">
+              <h2 className="section-title">Flow Preview</h2>
+              <div className="list">
+                {workflow.definition.steps.map((step, idx) => (
+                  <div key={idx} className="list-item">
+                    <strong>{step.type}</strong>
+                    <div className="small">{step.channel || step.duration || step.intent}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {active === "preview" && (
+          <section className="grid">
+            <div className="card">
+              <h2 className="section-title">AI Prompt Preview</h2>
+              <div className="form-grid">
                 <div>
                   <label>Channel</label>
                   <select value={form.channel} onChange={handleChange("channel")}>
@@ -103,76 +399,39 @@ export default function Home() {
                   </select>
                 </div>
               </div>
-              <button className="cta" type="submit" disabled={loading}>
-                {loading ? "Composing..." : "Generate Follow-Up"}
-              </button>
-            </form>
-          </div>
-        </section>
-
-        <section className="grid">
-          <div className="card output">
-            <span className="pill">Generated Message</span>
-            {error && <p>{error}</p>}
-            {!error && !result && <p>Run the generator to preview the follow-up message.</p>}
-            {result && (
-              <>
-                <span className="badge">{result.channel?.toUpperCase()}</span>
-                <div className="message">{result.text}</div>
-              </>
-            )}
-          </div>
-          <div className="card">
-            <span className="pill">Recovery Engine</span>
-            <p className="subtitle">
-              Turn missed appointments into booked revenue with intent-based messaging, one-click reschedules, and
-              soft-close follow-ups that feel personal.
-            </p>
-            <div className="stats">
-              <div className="stat">
-                <strong>+38%</strong>
-                <span>rebook rate lift</span>
-              </div>
-              <div className="stat">
-                <strong>2x</strong>
-                <span>faster confirmations</span>
-              </div>
-              <div className="stat">
-                <strong>24/7</strong>
-                <span>response coverage</span>
+              <div className="list" style={{ marginTop: 12 }}>
+                {contacts.map((c) => (
+                  <div key={c.id} className="list-item">
+                    <strong>{c.name}</strong>
+                    <div className="small">{c.status || "status unknown"}</div>
+                    <button className="pill" type="button" onClick={() => runPreview(c.id)} style={{ marginTop: 8 }}>
+                      Generate Preview
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="grid" style={{ marginTop: 24 }}>
-          <div className="card">
-            <span className="pill">What It Handles</span>
-            <p className="subtitle">Confirmations, reschedules, no-shows, rebooks — all routed through a single AI brain.</p>
-            <div className="hero-meta">
-              <span>Appointment confirmations</span>
-              <span>Missed visit recovery</span>
-              <span>Smart rebooking nudges</span>
-              <span>Personalized tone by brand</span>
+            <div className="card output">
+              <span className="pill">Prompt + Response</span>
+              {error && <p>{error}</p>}
+              {!error && !preview && <p>Select a contact to preview the AI prompt.</p>}
+              {preview && (
+                <>
+                  <div className="message">
+                    <strong>Prompt</strong>
+                    <p className="small" style={{ whiteSpace: "pre-wrap" }}>{preview.prompt}</p>
+                  </div>
+                  <div className="message">
+                    <strong>Response</strong>
+                    <p>{preview.text}</p>
+                  </div>
+                </>
+              )}
             </div>
-          </div>
-          <div className="card">
-            <span className="pill">Launch Ready</span>
-            <p className="subtitle">
-              This MVP is intentionally lean. Next up: GHL workflows, inbox sync, and multi-location onboarding in one
-              click.
-            </p>
-            <div className="hero-meta">
-              <span>GHL native integration</span>
-              <span>Neon analytics</span>
-              <span>Groq smart replies</span>
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
-        <div className="footer">
-          Built to feel premium from day one. You decide the voice, cadence, and conversion style.
-        </div>
+        {error && <div className="footer">{error}</div>}
       </div>
     </main>
   );

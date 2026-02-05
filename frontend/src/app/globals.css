@@ -40,12 +40,91 @@ main {
   margin: 0 auto;
 }
 
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.logo-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f5b362, #7d5df0);
+  box-shadow: 0 16px 30px rgba(70, 30, 140, 0.2);
+}
+
+.nav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.nav button {
+  border: 1px solid rgba(90, 79, 69, 0.2);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.nav .active {
+  background: #0b0b0c;
+  color: #fff;
+  border-color: #0b0b0c;
+}
+
 .hero {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 36px;
   align-items: center;
   margin-bottom: 42px;
+}
+
+.section-title {
+  font-size: 18px;
+  margin: 0 0 14px;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr);
+  gap: 18px;
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.list-item {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(90, 79, 69, 0.18);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.small {
+  font-size: 12px;
+  color: #6a5f56;
+}
+
+.inline {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .hero h1 {
