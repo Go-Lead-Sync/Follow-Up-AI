@@ -1,4 +1,4 @@
-FROM node:18-slim
+FROM node:20-slim
 WORKDIR /app
 COPY backend/package.json backend/package-lock.json* ./backend/
 RUN cd backend && npm install
