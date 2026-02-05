@@ -1,0 +1,117 @@
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  background: #f7f4ef;
+  color: #121212;
+}
+
+main {
+  min-height: 100vh;
+  padding: 48px 24px 80px;
+  background: radial-gradient(circle at top, #fff7e8 0%, #f7f4ef 45%, #ece7df 100%);
+}
+
+.container {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 32px;
+  align-items: center;
+  margin-bottom: 36px;
+}
+
+.brand {
+  font-size: 44px;
+  line-height: 1.05;
+  margin: 0 0 12px;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 18px;
+  margin: 0;
+  color: #3a3a3a;
+}
+
+.card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  color: #5c5046;
+}
+
+input, select, textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #d5cec5;
+  background: #fffefb;
+  font-size: 14px;
+}
+
+button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: none;
+  border-radius: 12px;
+  background: #121212;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.output {
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f1e9dd;
+  color: #5c5046;
+  font-size: 12px;
+}
+
+footer {
+  margin-top: 32px;
+  color: #6e6259;
+  font-size: 13px;
+}

@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: follow-up-ai-backend
+    env: node
+    plan: starter
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: PING_URL
+        sync: false
+
+  - type: cron
+    name: follow-up-ai-backend-ping
+    env: node
+    plan: starter
+    rootDir: backend
+    schedule: "*/10 * * * *"
+    buildCommand: npm install
+    startCommand: node scripts/ping.js
+    envVars:
+      - key: PING_URL
+        sync: false
