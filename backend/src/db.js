@@ -16,11 +16,18 @@ export async function ensureSchema() {
       created_at timestamptz not null default now(),
       name text not null,
       tone text not null,
+      instruction_block text,
+      do_list text,
+      dont_list text,
       booking_link text,
       hours text,
       policies text,
       faqs text
     );
+
+    alter table business_profiles add column if not exists instruction_block text;
+    alter table business_profiles add column if not exists do_list text;
+    alter table business_profiles add column if not exists dont_list text;
 
     create table if not exists contacts (
       id uuid primary key default gen_random_uuid(),

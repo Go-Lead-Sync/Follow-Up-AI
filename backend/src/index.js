@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { z } from "zod";
 import { pool, ensureSchema } from "./db.js";
+import * as cheerio from "cheerio";
 
 dotenv.config();
 
@@ -30,6 +31,9 @@ const FollowupSchema = z.object({
 const BusinessSchema = z.object({
   name: z.string().min(1),
   tone: z.string().min(1),
+  instructionBlock: z.string().optional().nullable(),
+  doList: z.string().optional().nullable(),
+  dontList: z.string().optional().nullable(),
   bookingLink: z.string().optional().nullable(),
   hours: z.string().optional().nullable(),
   policies: z.string().optional().nullable(),
@@ -141,11 +145,11 @@ app.post("/api/business", async (req, res) => {
     return res.status(400).json({ error: "invalid_payload", details: parsed.error.flatten() });
   }
 
-  const { name, tone, bookingLink, hours, policies, faqs } = parsed.data;
+  const { name, tone, instructionBlock, doList, dontList, bookingLink, hours, policies, faqs } = parsed.data;
   const { rows } = await pool.query(
-    `insert into business_profiles (name, tone, booking_link, hours, policies, faqs)
-     values ($1, $2, $3, $4, $5, $6) returning *`,
-    [name, tone, bookingLink || null, hours || null, policies || null, faqs || null]
+    `insert into business_profiles (name, tone, instruction_block, do_list, dont_list, booking_link, hours, policies, faqs)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`,
+    [name, tone, instructionBlock || null, doList || null, dontList || null, bookingLink || null, hours || null, policies || null, faqs || null]
   );
   res.json(rows[0]);
 });
@@ -156,12 +160,13 @@ app.put("/api/business/:id", async (req, res) => {
     return res.status(400).json({ error: "invalid_payload", details: parsed.error.flatten() });
   }
   const { id } = req.params;
-  const { name, tone, bookingLink, hours, policies, faqs } = parsed.data;
+  const { name, tone, instructionBlock, doList, dontList, bookingLink, hours, policies, faqs } = parsed.data;
   const { rows } = await pool.query(
     `update business_profiles
-     set name=$1, tone=$2, booking_link=$3, hours=$4, policies=$5, faqs=$6
-     where id=$7 returning *`,
-    [name, tone, bookingLink || null, hours || null, policies || null, faqs || null, id]
+     set name=$1, tone=$2, instruction_block=$3, do_list=$4, dont_list=$5,
+         booking_link=$6, hours=$7, policies=$8, faqs=$9
+     where id=$10 returning *`,
+    [name, tone, instructionBlock || null, doList || null, dontList || null, bookingLink || null, hours || null, policies || null, faqs || null, id]
   );
   res.json(rows[0] || null);
 });
@@ -280,7 +285,9 @@ app.post("/api/prompt-preview", async (req, res) => {
 
   const b = business.rows[0];
   const c = contact.rows[0];
-  const prompt = `You are the follow-up assistant for ${b.name}.\nTone: ${b.tone}\nHours: ${b.hours || "N/A"}\nPolicies: ${
+  const prompt = `You are the follow-up assistant for ${b.name}.\nTone: ${b.tone}\nInstruction block: ${
+    b.instruction_block || "N/A"
+  }\nDo list: ${b.do_list || "N/A"}\nDon't list: ${b.dont_list || "N/A"}\nHours: ${b.hours || "N/A"}\nPolicies: ${
     b.policies || "N/A"
   }\nFAQs: ${b.faqs || "N/A"}\nBooking link: ${b.booking_link || "N/A"}\n\nContact: ${
     c.name
@@ -320,6 +327,118 @@ app.post("/api/prompt-preview", async (req, res) => {
   }
 
   res.json({ prompt, text });
+});
+
+app.post("/api/scan", async (req, res) => {
+  const schema = z.object({
+    url: z.string().min(1),
+    maxPages: z.number().int().min(1).max(50).optional(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_payload", details: parsed.error.flatten() });
+  }
+
+  let { url, maxPages } = parsed.data;
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+
+  const origin = new URL(url).origin;
+  const limit = maxPages || 15;
+  const queue = [url];
+  const visited = new Set();
+  const pages = [];
+  const textChunks = [];
+
+  while (queue.length && pages.length < limit) {
+    const next = queue.shift();
+    if (!next || visited.has(next)) continue;
+    visited.add(next);
+    try {
+      const resp = await fetch(next, { redirect: "follow" });
+      if (!resp.ok || !resp.headers.get("content-type")?.includes("text/html")) continue;
+      const html = await resp.text();
+      const $ = cheerio.load(html);
+      $("script, style, noscript, svg").remove();
+      const title = $("title").first().text().trim();
+      const description = $("meta[name='description']").attr("content") || "";
+      const bodyText = $("body").text().replace(/\s+/g, " ").trim();
+      const slice = bodyText.slice(0, 4000);
+      pages.push({ url: next, title, description });
+      textChunks.push([title, description, slice].filter(Boolean).join(" ").trim());
+
+      $("a[href]").each((_, el) => {
+        const href = $(el).attr("href");
+        if (!href) return;
+        if (href.startsWith("mailto:") || href.startsWith("tel:") || href.startsWith("javascript:")) return;
+        try {
+          const resolved = new URL(href, next);
+          if (resolved.origin !== origin) return;
+          const cleaned = resolved.toString().split("#")[0];
+          if (!visited.has(cleaned)) {
+            queue.push(cleaned);
+          }
+        } catch {
+          // ignore
+        }
+      });
+    } catch {
+      // ignore fetch errors
+    }
+  }
+
+  const raw = textChunks.join("\n").slice(0, 12000);
+  let profile = {
+    name: pages[0]?.title || "Business",
+    tone: "Warm, concise, confident",
+    bookingLink: "",
+    hours: "",
+    policies: "",
+    faqs: "",
+    instructionBlock: "",
+    doList: "",
+    dontList: "",
+  };
+
+  if (process.env.GROQ_API_KEY && raw.length > 50) {
+    try {
+      const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-70b-versatile",
+          temperature: 0.2,
+          messages: [
+            { role: "system", content: "Extract a business profile from website text. Return JSON only." },
+            {
+              role: "user",
+              content: `Website text:\n${raw}\n\nReturn JSON with keys: name, tone, bookingLink, hours, policies, faqs, instructionBlock, doList, dontList.`,
+            },
+          ],
+        }),
+      });
+      if (groqRes.ok) {
+        const groqData = await groqRes.json();
+        const content = groqData?.choices?.[0]?.message?.content?.trim();
+        if (content) {
+          const jsonStart = content.indexOf("{");
+          const jsonEnd = content.lastIndexOf("}");
+          if (jsonStart >= 0 && jsonEnd > jsonStart) {
+            const parsedJson = JSON.parse(content.slice(jsonStart, jsonEnd + 1));
+            profile = { ...profile, ...parsedJson };
+          }
+        }
+      }
+    } catch {
+      // fallback to defaults
+    }
+  }
+
+  res.json({ pages, profile, rawSample: raw.slice(0, 1200) });
 });
 
 const port = Number(process.env.PORT || 8080);

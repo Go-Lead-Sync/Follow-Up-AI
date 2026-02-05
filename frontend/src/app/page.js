@@ -24,6 +24,9 @@ export default function Home() {
     id: "",
     name: "",
     tone: "",
+    instructionBlock: "",
+    doList: "",
+    dontList: "",
     bookingLink: "",
     hours: "",
     policies: "",
@@ -53,6 +56,9 @@ export default function Home() {
   });
   const [workflowId, setWorkflowId] = useState("");
   const [messages, setMessages] = useState([]);
+  const [scanUrl, setScanUrl] = useState("");
+  const [scanResult, setScanResult] = useState(null);
+  const [scanLoading, setScanLoading] = useState(false);
   const [messageForm, setMessageForm] = useState({
     businessId: "",
     contactId: "",
@@ -86,6 +92,9 @@ export default function Home() {
         id: data.id,
         name: data.name || "",
         tone: data.tone || "",
+        instructionBlock: data.instruction_block || "",
+        doList: data.do_list || "",
+        dontList: data.dont_list || "",
         bookingLink: data.booking_link || "",
         hours: data.hours || "",
         policies: data.policies || "",
@@ -128,6 +137,9 @@ export default function Home() {
           id: data.id,
           name: data.name,
           tone: data.tone,
+          instructionBlock: data.instruction_block || "",
+          doList: data.do_list || "",
+          dontList: data.dont_list || "",
           bookingLink: data.booking_link || "",
           hours: data.hours || "",
           policies: data.policies || "",
@@ -183,6 +195,42 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const runScan = async () => {
+    if (!scanUrl) return;
+    setScanLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${apiBase}/api/scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: scanUrl, maxPages: 25 }),
+      });
+      const data = await response.json();
+      setScanResult(data);
+    } catch (err) {
+      setError("Unable to scan site.");
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  const applyScanToBusiness = () => {
+    if (!scanResult?.profile) return;
+    const p = scanResult.profile;
+    setBusiness((prev) => ({
+      ...prev,
+      name: p.name || prev.name,
+      tone: p.tone || prev.tone,
+      instructionBlock: p.instructionBlock || prev.instructionBlock,
+      doList: p.doList || prev.doList,
+      dontList: p.dontList || prev.dontList,
+      bookingLink: p.bookingLink || prev.bookingLink,
+      hours: p.hours || prev.hours,
+      policies: p.policies || prev.policies,
+      faqs: p.faqs || prev.faqs,
+    }));
   };
 
   const saveWorkflow = async () => {
@@ -265,7 +313,7 @@ export default function Home() {
             Follow-Up AI
           </div>
           <div className="nav">
-            {["business", "contacts", "messages", "workflow", "preview", "leadconnector"].map((key) => (
+            {["business", "scan", "contacts", "messages", "workflow", "preview", "leadconnector"].map((key) => (
               <button
                 key={key}
                 type="button"
@@ -296,6 +344,18 @@ export default function Home() {
                 <input value={business.tone} onChange={(e) => setBusiness({ ...business, tone: e.target.value })} placeholder="Warm, confident, short sentences" />
               </div>
               <div>
+                <label>Instruction Block</label>
+                <textarea rows={3} value={business.instructionBlock} onChange={(e) => setBusiness({ ...business, instructionBlock: e.target.value })} placeholder="Single master instruction injected into every prompt." />
+              </div>
+              <div>
+                <label>Do List</label>
+                <textarea rows={3} value={business.doList} onChange={(e) => setBusiness({ ...business, doList: e.target.value })} placeholder="Do: keep it short, confirm time, include booking link." />
+              </div>
+              <div>
+                <label>Don't List</label>
+                <textarea rows={3} value={business.dontList} onChange={(e) => setBusiness({ ...business, dontList: e.target.value })} placeholder="Don't: mention discounts, promise refunds, discuss medical advice." />
+              </div>
+              <div>
                 <label>Booking Link</label>
                 <input value={business.bookingLink} onChange={(e) => setBusiness({ ...business, bookingLink: e.target.value })} />
               </div>
@@ -315,6 +375,55 @@ export default function Home() {
             <button className="cta" type="button" onClick={saveBusiness} disabled={loading}>
               {loading ? "Saving..." : "Save Business Profile"}
             </button>
+          </section>
+        )}
+
+        {active === "scan" && (
+          <section className="grid">
+            <div className="card">
+              <h2 className="section-title">Scan Website → Build Agent</h2>
+              <p className="subtitle">Scan a website to auto-build the business profile + FAQs + tone.</p>
+              <div className="form-grid">
+                <div>
+                  <label>Website URL</label>
+                  <input value={scanUrl} onChange={(e) => setScanUrl(e.target.value)} placeholder="https://example.com" />
+                </div>
+              </div>
+              <button className="cta" type="button" onClick={runScan} disabled={scanLoading}>
+                {scanLoading ? "Scanning..." : "Scan Site"}
+              </button>
+              {scanResult?.pages?.length > 0 && (
+                <div className="panel" style={{ marginTop: 14 }}>
+                  <div className="small">Pages scanned: {scanResult.pages.length}</div>
+                  <div className="list" style={{ marginTop: 8 }}>
+                    {scanResult.pages.slice(0, 6).map((p) => (
+                      <div key={p.url} className="list-item">
+                        <strong>{p.title || p.url}</strong>
+                        <div className="small">{p.url}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="card">
+              <h2 className="section-title">Suggested Agent Profile</h2>
+              {!scanResult && <p className="small">Run a scan to generate a draft profile.</p>}
+              {scanResult?.profile && (
+                <div className="panel">
+                  <div className="list">
+                    <div className="list-item"><strong>Name:</strong> {scanResult.profile.name}</div>
+                    <div className="list-item"><strong>Tone:</strong> {scanResult.profile.tone}</div>
+                    <div className="list-item"><strong>Hours:</strong> {scanResult.profile.hours}</div>
+                    <div className="list-item"><strong>Policies:</strong> {scanResult.profile.policies}</div>
+                    <div className="list-item"><strong>FAQs:</strong> {scanResult.profile.faqs}</div>
+                  </div>
+                  <button className="cta" type="button" onClick={applyScanToBusiness} style={{ marginTop: 12 }}>
+                    Apply To Business Profile
+                  </button>
+                </div>
+              )}
+            </div>
           </section>
         )}
 
