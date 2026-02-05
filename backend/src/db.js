@@ -62,6 +62,13 @@ export async function ensureSchema() {
       meta jsonb
     );
 
+    create table if not exists contact_sequences (
+      contact_id uuid primary key references contacts(id) on delete cascade,
+      workflow_id uuid references workflows(id) on delete cascade,
+      step_index int not null default 0,
+      updated_at timestamptz not null default now()
+    );
+
     create table if not exists followup_requests (
       id uuid primary key default gen_random_uuid(),
       created_at timestamptz not null default now(),

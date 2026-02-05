@@ -274,6 +274,164 @@ app.post("/api/messages", async (req, res) => {
   res.json(rows[0]);
 });
 
+app.post("/api/ai/reply", async (req, res) => {
+  const schema = z.object({
+    businessId: z.string().uuid(),
+    contactId: z.string().uuid(),
+    inboundText: z.string().min(1),
+    channel: z.enum(["sms", "email"]),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_payload", details: parsed.error.flatten() });
+  }
+
+  const { businessId, contactId, inboundText, channel } = parsed.data;
+  const business = await pool.query("select * from business_profiles where id=$1", [businessId]);
+  const contact = await pool.query("select * from contacts where id=$1", [contactId]);
+  if (!business.rows[0] || !contact.rows[0]) {
+    return res.status(404).json({ error: "not_found" });
+  }
+
+  const b = business.rows[0];
+  const c = contact.rows[0];
+
+  await pool.query(
+    `insert into messages (business_id, contact_id, direction, channel, body, status, provider)
+     values ($1, $2, 'inbound', $3, $4, 'received', 'LeadConnector')`,
+    [businessId, contactId, channel, inboundText]
+  );
+
+  const prompt = `You are the follow-up assistant for ${b.name}.
+Tone: ${b.tone}
+Instruction block: ${b.instruction_block || "N/A"}
+Do list: ${b.do_list || "N/A"}
+Don't list: ${b.dont_list || "N/A"}
+Policies: ${b.policies || "N/A"}
+FAQs: ${b.faqs || "N/A"}
+Booking link: ${b.booking_link || "N/A"}
+
+Contact: ${c.name}
+Status: ${c.status || "unknown"}
+Last appointment: ${c.last_appointment || "unknown"}
+Notes: ${c.notes || "none"}
+
+Inbound message: "${inboundText}"
+Respond with a concise, helpful ${channel.toUpperCase()} reply and move the conversation forward.`;
+
+  let text = `Thanks ${c.name}! What time works best for you?`;
+  if (process.env.GROQ_API_KEY) {
+    try {
+      const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-70b-versatile",
+          temperature: 0.4,
+          messages: [
+            { role: "system", content: "You are a precise follow-up assistant for local businesses." },
+            { role: "user", content: prompt },
+          ],
+        }),
+      });
+      if (groqRes.ok) {
+        const groqData = await groqRes.json();
+        const candidate = groqData?.choices?.[0]?.message?.content?.trim();
+        if (candidate) text = candidate;
+      }
+    } catch {
+      // fallback
+    }
+  }
+
+  const { rows } = await pool.query(
+    `insert into messages (business_id, contact_id, direction, channel, body, status, provider)
+     values ($1, $2, 'outbound', $3, $4, 'queued', 'LeadConnector') returning *`,
+    [businessId, contactId, channel, text]
+  );
+
+  res.json(rows[0]);
+});
+
+app.post("/api/sequence/run", async (req, res) => {
+  const schema = z.object({
+    businessId: z.string().uuid(),
+    contactId: z.string().uuid(),
+    workflowId: z.string().uuid(),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "invalid_payload", details: parsed.error.flatten() });
+  }
+
+  const { businessId, contactId, workflowId } = parsed.data;
+  const workflowRes = await pool.query("select * from workflows where id=$1", [workflowId]);
+  if (!workflowRes.rows[0]) return res.status(404).json({ error: "workflow_not_found" });
+  const steps = workflowRes.rows[0].definition?.steps || [];
+  if (!Array.isArray(steps) || steps.length === 0) return res.json({ status: "no_steps" });
+
+  const stateRes = await pool.query(
+    `insert into contact_sequences (contact_id, workflow_id, step_index)
+     values ($1, $2, 0)
+     on conflict (contact_id) do update set workflow_id=excluded.workflow_id
+     returning *`,
+    [contactId, workflowId]
+  );
+  let stepIndex = stateRes.rows[0]?.step_index ?? 0;
+
+  if (stepIndex >= steps.length) {
+    return res.json({ status: "complete" });
+  }
+
+  const step = steps[stepIndex];
+  if (step.type === "wait") {
+    await pool.query(`update contact_sequences set step_index=$1, updated_at=now() where contact_id=$2`, [
+      stepIndex + 1,
+      contactId,
+    ]);
+    return res.json({ status: "wait", duration: step.duration || "24h" });
+  }
+
+  if (step.type === "if_reply") {
+    return res.json({ status: "awaiting_reply" });
+  }
+
+  if (step.type === "message") {
+    const composeRes = await fetch("http://localhost:" + (process.env.PORT || 8080) + "/api/followup/compose", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: step.name || "Client",
+        channel: step.channel || "sms",
+        intent: step.intent || "confirm",
+        businessName: step.businessName || "Business",
+        appointmentTime: step.appointmentTime || "Soon",
+      }),
+    });
+    let text = "Hello! We are confirming your appointment.";
+    if (composeRes.ok) {
+      const data = await composeRes.json();
+      text = data.text || text;
+    }
+
+    await pool.query(
+      `insert into messages (business_id, contact_id, direction, channel, body, status, provider)
+       values ($1, $2, 'outbound', $3, $4, 'queued', 'LeadConnector')`,
+      [businessId, contactId, step.channel || "sms", text]
+    );
+    await pool.query(`update contact_sequences set step_index=$1, updated_at=now() where contact_id=$2`, [
+      stepIndex + 1,
+      contactId,
+    ]);
+    return res.json({ status: "sent", step: stepIndex });
+  }
+
+  res.json({ status: "skipped" });
+});
+
 app.post("/api/prompt-preview", async (req, res) => {
   const schema = z.object({
     businessId: z.string().uuid(),

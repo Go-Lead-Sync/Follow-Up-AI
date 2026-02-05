@@ -50,7 +50,10 @@ export default function Home() {
       steps: [
         { type: "message", channel: "sms", intent: "confirm" },
         { type: "wait", duration: "24h" },
+        { type: "if_reply" },
         { type: "message", channel: "sms", intent: "no_show" },
+        { type: "wait", duration: "24h" },
+        { type: "message", channel: "email", intent: "rebook" },
       ],
     },
   });
@@ -70,6 +73,8 @@ export default function Home() {
     status: "queued",
     provider: "LeadConnector",
   });
+  const [replyText, setReplyText] = useState("");
+  const [sequenceStatus, setSequenceStatus] = useState("");
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -197,6 +202,42 @@ export default function Home() {
       setError("Unable to log message.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const runSequenceStep = async () => {
+    if (!business.id || !workflowId || contacts.length === 0) return;
+    setSequenceStatus("Running next step...");
+    const target = contacts[0];
+    const response = await fetch(`${apiBase}/api/sequence/run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ businessId: business.id, contactId: target.id, workflowId }),
+    });
+    const data = await response.json();
+    setSequenceStatus(`Sequence status: ${data.status}`);
+    const messageRes = await fetch(`${apiBase}/api/messages?businessId=${business.id}`);
+    setMessages(await messageRes.json());
+  };
+
+  const simulateReply = async () => {
+    if (!business.id || contacts.length === 0 || !replyText) return;
+    const target = contacts[0];
+    const response = await fetch(`${apiBase}/api/ai/reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        businessId: business.id,
+        contactId: target.id,
+        inboundText: replyText,
+        channel: "sms",
+      }),
+    });
+    if (response.ok) {
+      setReplyText("");
+      const messageRes = await fetch(`${apiBase}/api/messages?businessId=${business.id}`);
+      setMessages(await messageRes.json());
+      setSequenceStatus("AI replied.");
     }
   };
 
@@ -642,6 +683,18 @@ export default function Home() {
             </div>
             <div className="card">
               <h2 className="section-title">Message History</h2>
+              <div className="panel" style={{ marginBottom: 12 }}>
+                <div className="small">Simulate inbound reply (AI will respond)</div>
+                <div className="form-grid" style={{ marginTop: 8 }}>
+                  <div>
+                    <label>Inbound Reply</label>
+                    <input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Can we move this to Friday?" />
+                  </div>
+                </div>
+                <button className="ghost" type="button" onClick={simulateReply} style={{ marginTop: 10 }}>
+                  Simulate Reply
+                </button>
+              </div>
               <div className="list">
                 {messages.length === 0 && <p className="small">No messages logged yet.</p>}
                 {messages.map((m) => (
@@ -703,6 +756,12 @@ export default function Home() {
               <button className="cta" type="button" onClick={saveWorkflow} disabled={loading}>
                 {loading ? "Saving..." : "Save Workflow"}
               </button>
+              <div style={{ marginTop: 12 }}>
+                <button className="ghost" type="button" onClick={runSequenceStep}>
+                  Run Next Step (Simulation)
+                </button>
+                {sequenceStatus && <div className="status" style={{ marginTop: 10 }}>{sequenceStatus}</div>}
+              </div>
             </div>
             <div className="card">
               <h2 className="section-title">Visual Flow</h2>
