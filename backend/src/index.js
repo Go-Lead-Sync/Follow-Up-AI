@@ -4,11 +4,16 @@ import dotenv from "dotenv";
 import { z } from "zod";
 import { pool, ensureSchema } from "./db.js";
 import * as cheerio from "cheerio";
-import { File, Blob, FormData } from "undici";
 
-if (!globalThis.File) globalThis.File = File;
-if (!globalThis.Blob) globalThis.Blob = Blob;
-if (!globalThis.FormData) globalThis.FormData = FormData;
+if (!globalThis.File) {
+  globalThis.File = class File {};
+}
+if (!globalThis.Blob) {
+  globalThis.Blob = class Blob {};
+}
+if (!globalThis.FormData) {
+  globalThis.FormData = class FormData {};
+}
 
 dotenv.config();
 
