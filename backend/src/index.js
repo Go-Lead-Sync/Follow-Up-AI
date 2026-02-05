@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { z } from "zod";
-import { pool } from "./db.js";
+import { pool, ensureSchema } from "./db.js";
 
 dotenv.config();
 
@@ -42,11 +42,66 @@ app.post("/api/followup/compose", async (req, res) => {
     rebook: `Thanks for coming in, ${name}. Want to book your next visit with ${businessName}?`,
   };
 
-  const text = templateByIntent[intent];
+  let text = templateByIntent[intent];
+
+  if (process.env.GROQ_API_KEY) {
+    try {
+      const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-70b-versatile",
+          temperature: 0.4,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a follow-up assistant for local businesses. Keep messages short, friendly, and action-oriented. Never invent policies or prices.",
+            },
+            {
+              role: "user",
+              content: `Compose a ${channel.toUpperCase()} message for ${intent}.\nClient: ${name}\nBusiness: ${businessName}\nAppointment: ${appointmentTime}`,
+            },
+          ],
+        }),
+      });
+
+      if (groqRes.ok) {
+        const groqData = await groqRes.json();
+        const candidate = groqData?.choices?.[0]?.message?.content?.trim();
+        if (candidate) {
+          text = candidate;
+        }
+      }
+    } catch (err) {
+      // fallback to template
+    }
+  }
+
+  try {
+    await pool.query(
+      `insert into followup_requests (name, business_name, appointment_time, channel, intent, response_text)
+       values ($1, $2, $3, $4, $5, $6)`,
+      [name, businessName, appointmentTime, channel, intent, text]
+    );
+  } catch (err) {
+    // ignore db errors for MVP response
+  }
+
   res.json({ channel, text });
 });
 
 const port = Number(process.env.PORT || 8080);
-app.listen(port, () => {
-  console.log(`Follow-Up AI backend running on :${port}`);
-});
+ensureSchema()
+  .then(() => {
+    app.listen(port, () => {
+      console.log(`Follow-Up AI backend running on :${port}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to start:", err.message);
+    process.exit(1);
+  });
