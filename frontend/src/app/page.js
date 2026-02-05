@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import ReactFlow, { Background, Controls } from "reactflow";
@@ -471,7 +471,7 @@ export default function Home() {
           <section className="hero-card">
             <h1 className="hero-title">Create your AI Agent in one step.</h1>
             <p className="subtitle">
-              Paste a website, click create, and we’ll build the full agent automatically. No manual setup.
+              Paste a website, click create, and weâ€™ll build the full agent automatically. No manual setup.
             </p>
             <div className="hero-actions">
               <button className="cta" type="button" onClick={() => setActive("scan")}>
@@ -539,7 +539,7 @@ export default function Home() {
           <section className="grid">
             <div className="card">
               <h2 className="section-title">Create AI Agent</h2>
-              <p className="subtitle">Paste a website and we’ll scan it to build the full AI agent automatically.</p>
+              <p className="subtitle">Paste a website and weâ€™ll scan it to build the full AI agent automatically.</p>
               <div className="form-grid">
                 <div>
                   <label>Website URL</label>
@@ -623,7 +623,7 @@ export default function Home() {
                 {contacts.map((c) => (
                   <div key={c.id} className="list-item">
                     <strong>{c.name}</strong>
-                    <div className="small">{c.status || "status unknown"} · {c.last_appointment || "no appointment"}</div>
+                    <div className="small">{c.status || "status unknown"} Â· {c.last_appointment || "no appointment"}</div>
                     <div className="inline" style={{ marginTop: 8 }}>
                       <button type="button" className="pill" onClick={() => runPreview(c.id)}>Preview AI</button>
                     </div>
@@ -708,11 +708,11 @@ export default function Home() {
                   <div key={m.id} className="message-card">
                     <div className="inline">
                       <span className="chip">{m.direction}</span>
-                      <span className="chip">{m.channel}</span>
+                      <span className="chip">{m.channel}</span>\n                      {m.meta?.usedGroq && <span className="chip">groq</span>}
                       <span className="small">{new Date(m.created_at).toLocaleString()}</span>
                     </div>
                     <strong>{m.body}</strong>
-                    <small>{m.status || "status unknown"} · {m.provider || "LeadConnector"}</small>
+                    <small>{m.status || "status unknown"} Â· {m.provider || "LeadConnector"}</small>
                   </div>
                 ))}
               </div>
@@ -885,7 +885,7 @@ export default function Home() {
               </div>
             </div>
             <div className="card">
-              <h2 className="section-title">What We�ll Enable</h2>
+              <h2 className="section-title">What We’ll Enable</h2>
               <div className="timeline">
                 <div className="timeline-item">Sync contacts and calendars</div>
                 <div className="timeline-item">Inbound/outbound SMS + email history</div>
@@ -901,4 +901,5 @@ export default function Home() {
     </main>
   );
 }
+
 

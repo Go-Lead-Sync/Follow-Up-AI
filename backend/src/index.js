@@ -366,6 +366,7 @@ Inbound message: "${inboundText}"
 Respond with a concise, helpful ${channel.toUpperCase()} reply and move the conversation forward.`;
 
   let text = `Thanks ${c.name}! What time works best for you?`;
+  let usedGroq = false;
   if (process.env.GROQ_API_KEY) {
     try {
       const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -386,7 +387,10 @@ Respond with a concise, helpful ${channel.toUpperCase()} reply and move the conv
       if (groqRes.ok) {
         const groqData = await groqRes.json();
         const candidate = groqData?.choices?.[0]?.message?.content?.trim();
-        if (candidate) text = candidate;
+        if (candidate) {
+          text = candidate;
+          usedGroq = true;
+        }
       }
     } catch {
       // fallback
@@ -394,12 +398,12 @@ Respond with a concise, helpful ${channel.toUpperCase()} reply and move the conv
   }
 
   const { rows } = await pool.query(
-    `insert into messages (business_id, contact_id, direction, channel, body, status, provider)
-     values ($1, $2, 'outbound', $3, $4, 'queued', 'LeadConnector') returning *`,
-    [businessId, contactId, channel, text]
+    `insert into messages (business_id, contact_id, direction, channel, body, status, provider, meta)
+     values ($1, $2, 'outbound', $3, $4, 'queued', 'LeadConnector', $5) returning *`,
+    [businessId, contactId, channel, text, { usedGroq }]
   );
 
-  res.json(rows[0]);
+  res.json({ ...rows[0], usedGroq });
 });
 
 app.post("/api/sequence/run", async (req, res) => {
