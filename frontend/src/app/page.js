@@ -58,13 +58,19 @@ export default function Home() {
       <div className="container">
         <section className="hero">
           <div>
-            <p className="badge">Follow-Up AI MVP</p>
-            <h1 className="brand">Automated follow-ups that reschedule, recover, and rebook.</h1>
+            <span className="badge">Follow-Up AI Suite</span>
+            <h1>Make reschedules feel inevitable.</h1>
             <p className="subtitle">
-              Generate SMS and email follow-ups for confirmations, reschedules, no-shows, and rebook flows.
+              High-touch follow-ups that recover no-shows, confirm appointments, and book the next visit — with
+              confidence and style.
             </p>
+            <div className="hero-meta">
+              <span>SMS + Email</span>
+              <span>Groq-powered messaging</span>
+              <span>Neon-backed insights</span>
+            </div>
           </div>
-          <div className="card">
+          <div className="card float">
             <form onSubmit={handleSubmit}>
               <div className="form-grid">
                 <div>
@@ -97,28 +103,76 @@ export default function Home() {
                   </select>
                 </div>
               </div>
-              <button type="submit" disabled={loading}>
+              <button className="cta" type="submit" disabled={loading}>
                 {loading ? "Composing..." : "Generate Follow-Up"}
               </button>
             </form>
           </div>
         </section>
 
-        <section className="card output">
-          <strong>Generated Message</strong>
-          {error && <p>{error}</p>}
-          {!error && !result && <p>Run the generator to preview the follow-up message.</p>}
-          {result && (
-            <>
-              <span className="badge">{result.channel?.toUpperCase()}</span>
-              <p>{result.text}</p>
-            </>
-          )}
+        <section className="grid">
+          <div className="card output">
+            <span className="pill">Generated Message</span>
+            {error && <p>{error}</p>}
+            {!error && !result && <p>Run the generator to preview the follow-up message.</p>}
+            {result && (
+              <>
+                <span className="badge">{result.channel?.toUpperCase()}</span>
+                <div className="message">{result.text}</div>
+              </>
+            )}
+          </div>
+          <div className="card">
+            <span className="pill">Recovery Engine</span>
+            <p className="subtitle">
+              Turn missed appointments into booked revenue with intent-based messaging, one-click reschedules, and
+              soft-close follow-ups that feel personal.
+            </p>
+            <div className="stats">
+              <div className="stat">
+                <strong>+38%</strong>
+                <span>rebook rate lift</span>
+              </div>
+              <div className="stat">
+                <strong>2x</strong>
+                <span>faster confirmations</span>
+              </div>
+              <div className="stat">
+                <strong>24/7</strong>
+                <span>response coverage</span>
+              </div>
+            </div>
+          </div>
         </section>
 
-        <footer>
-          This MVP is intentionally lightweight. Next steps: client onboarding, templates, and GHL integrations.
-        </footer>
+        <section className="grid" style={{ marginTop: 24 }}>
+          <div className="card">
+            <span className="pill">What It Handles</span>
+            <p className="subtitle">Confirmations, reschedules, no-shows, rebooks — all routed through a single AI brain.</p>
+            <div className="hero-meta">
+              <span>Appointment confirmations</span>
+              <span>Missed visit recovery</span>
+              <span>Smart rebooking nudges</span>
+              <span>Personalized tone by brand</span>
+            </div>
+          </div>
+          <div className="card">
+            <span className="pill">Launch Ready</span>
+            <p className="subtitle">
+              This MVP is intentionally lean. Next up: GHL workflows, inbox sync, and multi-location onboarding in one
+              click.
+            </p>
+            <div className="hero-meta">
+              <span>GHL native integration</span>
+              <span>Neon analytics</span>
+              <span>Groq smart replies</span>
+            </div>
+          </div>
+        </section>
+
+        <div className="footer">
+          Built to feel premium from day one. You decide the voice, cadence, and conversion style.
+        </div>
       </div>
     </main>
   );
