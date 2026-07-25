@@ -398,6 +398,67 @@ textarea:focus {
   animation: float 6s ease-in-out infinite;
 }
 
+.kanban {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(240px, 1fr);
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.kanban-col {
+  background: var(--glass);
+  border-radius: 20px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  min-height: 200px;
+}
+
+.kanban-col-title {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #685b51;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+.inbox {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.inbox-list {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.thread {
+  display: grid;
+  gap: 10px;
+  max-height: 40vh;
+  overflow-y: auto;
+  margin: 12px 0;
+}
+
+.message-card.outbound {
+  justify-self: end;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(236, 72, 153, 0.12));
+}
+
+.message-card.inbound {
+  justify-self: start;
+}
+
+@media (max-width: 900px) {
+  .inbox {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 700px) {
   main {
     padding: 32px 16px 72px;
